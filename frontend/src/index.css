@@ -1,0 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
+
+:root {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: #1e293b;
+  background-color: #f8fafc;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Color Palette */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --border-color: #e2e8f0;
+  
+  --color-auth: #3b82f6;       /* Blue */
+  --color-dns: #22c55e;        /* Green */
+  --color-recon: #f97316;      /* Orange */
+  --color-malware: #ef4444;    /* Red */
+  --color-system: #64748b;     /* Gray */
+  --color-network: #a855f7;    /* Purple */
+  --color-other: #94a3b8;      /* Light Gray */
+}
+
+body {
+  margin: 0;
+  display: flex;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--bg-primary);
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* React Flow Custom Styles */
+.react-flow__node {
+  border-radius: 6px;
+  font-family: 'Outfit', sans-serif;
+}
+
+.react-flow__handle {
+  opacity: 0;
+}
+
+/* Custom flow graph classes */
+.flow-lane-line {
+  stroke-dasharray: 5 5;
+  stroke: #cbd5e1;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2px;
+}
+
+.react-flow__edge.correlated .react-flow__edge-path {
+  stroke-width: 4px;
+  stroke-dasharray: none;
+}
