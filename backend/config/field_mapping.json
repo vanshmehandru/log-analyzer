@@ -1,0 +1,141 @@
+{
+  "timestamp": [
+    "time",
+    "timestamp",
+    "event time",
+    "event_time"
+  ],
+
+  "src_ip": [
+    "source ip",
+    "src ip",
+    "src address",
+    "client ip",
+    "source address",
+    "src_ip",
+    "source_ip"
+  ],
+
+  "dst_ip": [
+    "destination ip",
+    "dst ip",
+    "dst address",
+    "server ip",
+    "destination address",
+    "dst_ip",
+    "destination_ip"
+  ],
+
+  "src_port": [
+    "src port",
+    "source port",
+    "src_port",
+    "source_port"
+  ],
+
+  "dst_port": [
+    "dst port",
+    "destination port",
+    "dst_port",
+    "destination_port"
+  ],
+
+  "event_name": [
+    "event name",
+    "event",
+    "activity",
+    "action"
+  ],
+
+  "severity": [
+    "severity",
+    "priority"
+  ],
+
+  "risk_score": [
+    "magnitude",
+    "risk",
+    "threat score",
+    "threat_score",
+    "risk_score"
+  ],
+
+  "outcome": [
+    "outcome",
+    "status",
+    "result",
+    "action_status"
+  ],
+
+  "process_name": [
+    "process name",
+    "process_name",
+    "process",
+    "proc",
+    "image_path",
+    "executable"
+  ],
+
+  "domain": [
+    "domain",
+    "target domain",
+    "target_domain",
+    "dns_domain",
+    "site"
+  ],
+
+  "dns_query": [
+    "dns query",
+    "dns_query",
+    "query",
+    "resolved_name"
+  ],
+
+  "username": [
+    "username",
+    "user",
+    "usr",
+    "account",
+    "user_name"
+  ],
+
+  "hostname": [
+    "hostname",
+    "host",
+    "machine",
+    "computer",
+    "computer_name"
+  ],
+
+  "protocol": [
+    "protocol",
+    "proto"
+  ],
+
+  "application": [
+    "application",
+    "app",
+    "service"
+  ],
+
+  "bytes": [
+    "bytes",
+    "size",
+    "data_size",
+    "bytes_sent",
+    "bytes_received"
+  ],
+
+  "packet_count": [
+    "packet_count",
+    "packets",
+    "pkts",
+    "packet count"
+  ],
+
+  "duration": [
+    "duration",
+    "time_taken",
+    "latency"
+  ]
+}

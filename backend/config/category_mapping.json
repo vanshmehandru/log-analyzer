@@ -1,0 +1,33 @@
+{
+  "Authentication": [
+    "login failed",
+    "login success",
+    "accepted public key",
+    "authentication failure",
+    "login denied"
+  ],
+
+  "DNS": [
+    "dns query",
+    "dns response"
+  ],
+
+  "Reconnaissance": [
+    "port scan",
+    "network scan"
+  ],
+
+  "System": [
+    "service started",
+    "service stopped"
+  ],
+
+  "Malware": [
+    "malware detected"
+  ],
+
+  "Network": [
+    "connection established",
+    "connection terminated"
+  ]
+}

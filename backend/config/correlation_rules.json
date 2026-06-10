@@ -1,0 +1,19 @@
+{
+  "brute_force": {
+    "enabled": true,
+    "threshold": 5,
+    "window_minutes": 5
+  },
+
+  "port_scan": {
+    "enabled": true,
+    "threshold": 10,
+    "window_seconds": 30
+  },
+
+  "lateral_movement": {
+    "enabled": true,
+    "threshold": 3,
+    "window_minutes": 10
+  }
+}
