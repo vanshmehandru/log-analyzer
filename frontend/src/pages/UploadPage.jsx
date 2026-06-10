@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
@@ -33,9 +33,43 @@ function UploadPage() {
   const [file2, setFile2] = useState(null);
   const [file3, setFile3] = useState(null);
   
+  const [uploads, setUploads] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [summary, setSummary] = useState(null);
+
+  useEffect(() => {
+    const fetchUploads = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/uploads`);
+        setUploads(response.data);
+      } catch (err) {
+        console.error("Failed to fetch uploads:", err);
+      }
+    };
+    fetchUploads();
+  }, []);
+
+  const handleClearDatabase = async () => {
+    if (!window.confirm("Are you sure you want to delete all uploaded logs and incidents? This cannot be undone.")) {
+      return;
+    }
+    setLoading(true);
+    try {
+      await axios.post(`${API_URL}/upload/clear`);
+      setUploads([]);
+      setFile1(null);
+      setFile2(null);
+      setFile3(null);
+      setError(null);
+      setSummary(null);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to clear database.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFileChange = (e, index) => {
     const file = e.target.files[0];
@@ -68,6 +102,9 @@ function UploadPage() {
         }
       });
       setSummary(response.data);
+      // Refresh uploads list
+      const uRes = await axios.get(`${API_URL}/uploads`);
+      setUploads(uRes.data);
     } catch (err) {
       const msg = err.response?.data?.detail || "An error occurred during log normalization.";
       setError(msg);
@@ -88,6 +125,44 @@ function UploadPage() {
       {error && (
         <Alert severity="error" sx={{ mb: 4, borderRadius: 2 }}>
           {error}
+        </Alert>
+      )}
+
+      {uploads.length > 0 && !summary && (
+        <Alert 
+          severity="info" 
+          sx={{ mb: 4, borderRadius: 3, p: 2, display: 'flex', alignItems: 'center' }} 
+          action={
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
+              <Button 
+                variant="contained" 
+                color="primary" 
+                size="small" 
+                onClick={() => navigate('/analysis')}
+                sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 1.5 }}
+              >
+                Go to Analysis
+              </Button>
+              <Button 
+                variant="outlined" 
+                color="error" 
+                size="small" 
+                onClick={handleClearDatabase}
+                sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 1.5 }}
+              >
+                Clear Database
+              </Button>
+            </Box>
+          }
+        >
+          <Box sx={{ pr: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              Active Database Session Found
+            </Typography>
+            <Typography variant="body2" sx={{ fontSize: '0.85rem', mt: 0.5 }}>
+              The database contains {uploads.length} uploaded file(s) and associated logs. You can analyze them now or clear them to upload new logs.
+            </Typography>
+          </Box>
         </Alert>
       )}
 

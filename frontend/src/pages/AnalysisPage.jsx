@@ -1,13 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import ReactFlow, { 
-  Controls, 
-  Background, 
-  useNodesState, 
-  useEdgesState,
-  MarkerType 
-} from 'reactflow';
-import 'reactflow/dist/style.css';
 import {
   Container,
   Box,
@@ -27,47 +19,110 @@ import {
   ListItem,
   ListItemText,
   Divider,
-  Paper
+  Paper,
+  TextField,
+  Tooltip,
+  Autocomplete
 } from '@mui/material';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import CloseIcon from '@mui/icons-material/Close';
 import ShieldIcon from '@mui/icons-material/Shield';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import TerminalIcon from '@mui/icons-material/Terminal';
+import InfoIcon from '@mui/icons-material/Info';
 
 const API_URL = 'http://localhost:8000';
 
-// Event category color definitions
-const CATEGORY_COLORS = {
-  "Authentication": "#3b82f6", // Blue
-  "DNS": "#22c55e",            // Green
-  "Reconnaissance": "#f97316", // Orange
-  "Malware": "#ef4444",        // Red
-  "System": "#64748b",         // Gray
-  "Network": "#a855f7",        // Purple
-  "Other": "#94a3b8"           // Default Slate
+// HSL tailored high-fidelity colors matching Wireshark protocol style
+const PROTOCOL_THEMES = {
+  "Authentication": {
+    bg: "#eff6ff",     // soft blue
+    border: "#bfdbfe",
+    stroke: "#2563eb",
+    text: "#1e3a8a",
+    tag: "AUTH"
+  },
+  "DNS": {
+    bg: "#f0fdf4",     // soft green
+    border: "#bbf7d0",
+    stroke: "#16a34a",
+    text: "#14532d",
+    tag: "DNS"
+  },
+  "Reconnaissance": {
+    bg: "#fff7ed",     // soft orange
+    border: "#fed7aa",
+    stroke: "#ea580c",
+    text: "#7c2d12",
+    tag: "RECON"
+  },
+  "Malware": {
+    bg: "#fff1f2",     // soft rose
+    border: "#fecdd3",
+    stroke: "#e11d48",
+    text: "#881337",
+    tag: "MALWARE"
+  },
+  "Network": {
+    bg: "#faf5ff",     // soft purple
+    border: "#e9d5ff",
+    stroke: "#9333ea",
+    text: "#581c87",
+    tag: "NET"
+  },
+  "System": {
+    bg: "#f8fafc",     // soft slate
+    border: "#e2e8f0",
+    stroke: "#475569",
+    text: "#0f172a",
+    tag: "SYS"
+  },
+  "Other": {
+    bg: "#f8fafc",
+    border: "#e2e8f0",
+    stroke: "#64748b",
+    text: "#334155",
+    tag: "OTHER"
+  }
 };
 
 function AnalysisPage() {
   const [logs, setLogs] = useState([]);
   const [uploads, setUploads] = useState([]);
   
-  // Filter states
-  const [visualizeBy, setVisualizeBy] = useState('Source IP');
-  const [timeRange, setTimeRange] = useState('all');
+  // Filtering States
+  const [visualizeBy, setVisualizeBy] = useState('IP Address');
+  const [selectedEntities, setSelectedEntities] = useState([]);
   const [eventCategory, setEventCategory] = useState('all');
   const [severity, setSeverity] = useState('all');
-  const [sourceLog, setSourceLog] = useState('all');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   
-  // React Flow states
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  
-  // Details Drawer state
+  // Details Drawer & Loading States
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Fetch log sources for filters
+  const handleClearDatabase = async () => {
+    if (!window.confirm("Are you sure you want to delete all uploaded logs and incidents? This cannot be undone.")) {
+      return;
+    }
+    setLoading(true);
+    try {
+      await axios.post(`${API_URL}/upload/clear`);
+      setLogs([]);
+      setSelectedEntities([]);
+      setStartTime('');
+      setEndTime('');
+    } catch (err) {
+      console.error("Failed to clear database:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load uploads once
   useEffect(() => {
     const fetchUploads = async () => {
       try {
@@ -80,20 +135,24 @@ function AnalysisPage() {
     fetchUploads();
   }, []);
 
-  // Fetch logs and construct graph
+  // Fetch filtered data
   const generateVisualization = async () => {
     setLoading(true);
     try {
       const params = {};
       if (eventCategory !== 'all') params.event_category = eventCategory;
       if (severity !== 'all') params.severity = severity;
-      if (sourceLog !== 'all') params.source_log = sourceLog;
-      if (timeRange !== 'all') params.time_range = timeRange;
+      if (startTime) params.start_time = startTime;
+      if (endTime) params.end_time = endTime;
+      
+      // Pass the selected visualization criteria
+      params.entity_type = visualizeBy;
+      if (selectedEntities.length > 0) {
+        params.entity_vals = selectedEntities.join(',');
+      }
 
       const response = await axios.get(`${API_URL}/logs/flow`, { params });
-      const logsData = response.data;
-      setLogs(logsData);
-      buildFlowGraph(logsData, visualizeBy);
+      setLogs(response.data);
     } catch (err) {
       console.error("Failed to query flow logs:", err);
     } finally {
@@ -101,194 +160,88 @@ function AnalysisPage() {
     }
   };
 
-  // Run initial query
+  // Run query on load and when fundamental selections change
   useEffect(() => {
     generateVisualization();
-  }, []);
+  }, [visualizeBy]);
 
-  // Build nodes and edges for React Flow
-  const buildFlowGraph = (data, visualAttr) => {
-    if (!data || data.length === 0) {
-      setNodes([]);
-      setEdges([]);
-      return;
-    }
+  // Reset selected entities when visualization criteria changes
+  useEffect(() => {
+    setSelectedEntities([]);
+  }, [visualizeBy]);
 
-    // 1. Identify unique lanes (entities)
-    const getEntities = (log) => {
-      switch (visualAttr) {
-        case 'Source IP':
-          return { src: log.src_ip || "Unknown", dst: log.dst_ip || "Unknown" };
-        case 'Destination IP':
-          return { src: log.src_ip || "Unknown", dst: log.dst_ip || "Unknown" };
-        case 'Username':
-          return { src: log.username || "System", dst: log.hostname || log.dst_ip || "Target" };
-        case 'Hostname':
-          return { src: log.hostname || "SourceHost", dst: log.dst_ip || "Destination" };
-        case 'Event Category':
-          return { src: log.event_category || "Other", dst: log.event_name || "Event" };
-        case 'Protocol':
-          return { src: log.protocol || "Any", dst: log.application || "Traffic" };
-        case 'Destination Port':
-          return { src: log.src_ip || "Source", dst: log.dst_port ? String(log.dst_port) : "Any" };
-        case 'Application':
-          return { src: log.application || "App", dst: log.process_name || "Process" };
-        case 'Process Name':
-          return { src: log.process_name || "Process", dst: log.hostname || "Host" };
-        default:
-          return { src: log.src_ip || "Source", dst: log.dst_ip || "Destination" };
-      }
-    };
-
-    const uniqueLanesSet = new Set();
-    data.forEach(log => {
-      const { src, dst } = getEntities(log);
-      uniqueLanesSet.add(src);
-      uniqueLanesSet.add(dst);
-    });
-
-    const lanes = Array.from(uniqueLanesSet);
-    
-    // Position lanes horizontally
-    const lanePositions = {};
-    lanes.forEach((lane, idx) => {
-      lanePositions[lane] = idx * 250;
-    });
-
-    const newNodes = [];
-    const newEdges = [];
-    const maxY = data.length * 80 + 150;
-
-    // 2. Render Header Nodes (Entity Lanes at top)
-    lanes.forEach(lane => {
-      const x = lanePositions[lane];
-      // Column Header
-      newNodes.push({
-        id: `header:${lane}`,
-        position: { x: x, y: 10 },
-        data: { label: lane },
-        style: {
-          background: '#ffffff',
-          color: '#1e293b',
-          border: '2px solid #cbd5e1',
-          padding: '10px 15px',
-          fontWeight: '700',
-          fontSize: '13px',
-          width: 180,
-          textAlign: 'center',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-        },
-        type: 'input',
-        draggable: false
-      });
-
-      // Bottom boundary anchor for vertical lane lines
-      newNodes.push({
-        id: `footer:${lane}`,
-        position: { x: x + 90, y: maxY },
-        data: { label: '' },
-        style: { opacity: 0, width: 0, height: 0, padding: 0 },
-        draggable: false
-      });
-
-      // Vertical dotted lane lifeline edge
-      newEdges.push({
-        id: `line:${lane}`,
-        source: `header:${lane}`,
-        target: `footer:${lane}`,
-        style: { stroke: '#cbd5e1', strokeDasharray: '5 5', strokeWidth: 1.5 },
-        className: 'flow-lane-line',
-        focusable: false,
-        selectable: false
-      });
-    });
-
-    // 3. Render Events and Arrows
-    data.forEach((log, idx) => {
-      const y = 100 + idx * 80;
-      const { src, dst } = getEntities(log);
-      const xSrc = lanePositions[src] + 90; // offset to center of the 180px wide header
-      const xDst = lanePositions[dst] + 90;
-
-      // Y-Axis Time node on the left
-      newNodes.push({
-        id: `time:${log.id}`,
-        position: { x: -180, y: y - 10 },
-        data: { label: log.timestamp || "0.0" },
-        style: {
-          background: '#f1f5f9',
-          color: '#64748b',
-          border: 'none',
-          padding: '4px 8px',
-          fontSize: '11px',
-          fontFamily: 'monospace',
-          fontWeight: 600,
-          width: 100,
-          textAlign: 'right'
-        },
-        draggable: false
-      });
-
-      // Anchor nodes on the lifelines
-      const srcAnchorId = `anchor-src:${log.id}`;
-      const dstAnchorId = `anchor-dst:${log.id}`;
-
-      newNodes.push({
-        id: srcAnchorId,
-        position: { x: xSrc, y: y },
-        data: { label: '' },
-        style: { background: CATEGORY_COLORS[log.event_category] || CATEGORY_COLORS["Other"], border: 'none', width: 8, height: 8, borderRadius: '50%' },
-        draggable: false
-      });
-
-      newNodes.push({
-        id: dstAnchorId,
-        position: { x: xDst, y: y },
-        data: { label: '' },
-        style: { background: CATEGORY_COLORS[log.event_category] || CATEGORY_COLORS["Other"], border: 'none', width: 8, height: 8, borderRadius: '50%' },
-        draggable: false
-      });
-
-      // Conversation Directed Edge (Arrow)
-      const edgeColor = CATEGORY_COLORS[log.event_category] || CATEGORY_COLORS["Other"];
-      const isCorrelated = log.correlated;
-
-      newEdges.push({
-        id: `edge:${log.id}`,
-        source: srcAnchorId,
-        target: dstAnchorId,
-        label: log.event_name,
-        labelStyle: { fill: isCorrelated ? '#ef4444' : '#1e293b', fontWeight: isCorrelated ? 700 : 500, fontSize: '11px' },
-        labelBgPadding: 4,
-        labelBgBorderRadius: 4,
-        labelBgStyle: { fill: '#ffffff', fillOpacity: 0.95, stroke: isCorrelated ? '#fca5a5' : '#e2e8f0', strokeWidth: 1 },
-        style: {
-          stroke: isCorrelated ? '#ef4444' : edgeColor,
-          strokeWidth: isCorrelated ? 3.5 : 2,
-        },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 15,
-          height: 15,
-          color: isCorrelated ? '#ef4444' : edgeColor,
-        },
-        className: isCorrelated ? 'correlated' : '',
-        data: { log } // pass raw log for edge click
-      });
-    });
-
-    setNodes(newNodes);
-    setEdges(newEdges);
-  };
-
-  const handleEdgeClick = (event, edge) => {
-    if (edge.data && edge.data.log) {
-      setSelectedEvent(edge.data.log);
-      setDrawerOpen(true);
+  // Helper to resolve entity values from a log based on current visualization type
+  const getEntityValue = (log, type) => {
+    switch (type) {
+      case 'IP Address':
+        return [log.src_ip, log.dst_ip].filter(Boolean);
+      case 'Username':
+        return [log.username].filter(Boolean);
+      case 'Hostname':
+        return [log.hostname].filter(Boolean);
+      case 'Protocol':
+        return [log.protocol].filter(Boolean);
+      case 'Application':
+        return [log.application].filter(Boolean);
+      default:
+        return [log.src_ip, log.dst_ip].filter(Boolean);
     }
   };
 
-  // Simple recommendations compiler helper
+  // Compute all unique entities available in the CURRENT loaded logs
+  const allUniqueEntities = useMemo(() => {
+    const set = new Set();
+    logs.forEach(log => {
+      getEntityValue(log, visualizeBy).forEach(val => set.add(val));
+    });
+    return Array.from(set).sort();
+  }, [logs, visualizeBy]);
+
+
+
+  // Determine the active lifelines (columns) to display in the graph
+  const activeEntities = useMemo(() => {
+    const counts = {};
+    logs.forEach(log => {
+      getEntityValue(log, visualizeBy).forEach(val => {
+        counts[val] = (counts[val] || 0) + 1;
+      });
+    });
+
+    if (selectedEntities.length > 0) {
+      const selectedSet = new Set(selectedEntities.map(v => String(v).trim()));
+      const partnerSet = new Set();
+      
+      logs.forEach(log => {
+        const vals = getEntityValue(log, visualizeBy);
+        const hasSelected = vals.some(val => selectedSet.has(val));
+        if (hasSelected) {
+          vals.forEach(val => {
+            if (!selectedSet.has(val)) {
+              partnerSet.add(val);
+            }
+          });
+        }
+      });
+      
+      const sortedPartners = Array.from(partnerSet).sort((a, b) => (counts[b] || 0) - (counts[a] || 0));
+      const maxLanes = 30; // reasonable limit for visualization
+      const combined = [
+        ...selectedEntities,
+        ...sortedPartners.slice(0, maxLanes)
+      ];
+      
+      return Array.from(new Set(combined)).sort();
+    }
+
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(entry => entry[0])
+      .sort();
+  }, [logs, visualizeBy, selectedEntities]);
+
+  // Helper to fetch mitigation playbook
   const getPlaybook = (category, name) => {
     if (category === "Authentication") {
       return [
@@ -297,14 +250,14 @@ function AnalysisPage() {
         "Audit log history for concurrent logins across IP addresses."
       ];
     }
-    if (category === "Reconnaissance" || name.toLowerCase().includes("scan")) {
+    if (category === "Reconnaissance" || (name && name.toLowerCase().includes("scan"))) {
       return [
         "Temporarily block source IP address at perimeter gateway.",
         "Check firewall policy rules on targeted destination ports.",
         "Ensure host defense systems are actively dropping scan packets."
       ];
     }
-    if (category === "Malware" || name.toLowerCase().includes("malware")) {
+    if (category === "Malware" || (name && name.toLowerCase().includes("malware"))) {
       return [
         "Quarantine system endpoint immediately to avoid lateral infection.",
         "Revoke all user token credentials logged in to host.",
@@ -318,54 +271,95 @@ function AnalysisPage() {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
-      {/* Filtering Control Bar */}
-      <Paper variant="outlined" sx={{ p: 2, m: 2, borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: 'none' }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={6} md={2.5}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Visualize By</InputLabel>
-              <Select
-                value={visualizeBy}
-                label="Visualize By"
-                onChange={(e) => setVisualizeBy(e.target.value)}
-              >
-                <MenuItem value="Source IP">Source IP</MenuItem>
-                <MenuItem value="Destination IP">Destination IP</MenuItem>
-                <MenuItem value="Username">Username</MenuItem>
-                <MenuItem value="Hostname">Hostname</MenuItem>
-                <MenuItem value="Event Category">Event Category</MenuItem>
-                <MenuItem value="Protocol">Protocol</MenuItem>
-                <MenuItem value="Destination Port">Destination Port</MenuItem>
-                <MenuItem value="Application">Application</MenuItem>
-                <MenuItem value="Process Name">Process Name</MenuItem>
-              </Select>
-            </FormControl>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', overflow: 'hidden', bgcolor: '#f8fafc' }}>
+      {/* Premium Filtering Panel */}
+      <Paper 
+        variant="outlined" 
+        sx={{ 
+          p: 2.5, 
+          m: 2, 
+          mb: 0, 
+          borderRadius: 4, 
+          borderColor: '#e2e8f0', 
+          background: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(8px)',
+          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.02), 0 2px 4px -2px rgb(0 0 0 / 0.02)'
+        }}
+      >
+        <Grid container spacing={2.5} alignItems="center">
+          {/* Row 1: Visualize By & Autocomplete */}
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <FormControl size="small" sx={{ width: 200, flexShrink: 0 }}>
+                <InputLabel sx={{ fontWeight: 500 }}>Visualize By</InputLabel>
+                <Select
+                  value={visualizeBy}
+                  label="Visualize By"
+                  onChange={(e) => setVisualizeBy(e.target.value)}
+                  sx={{ borderRadius: 2 }}
+                >
+                  <MenuItem value="IP Address">IP Address</MenuItem>
+                  <MenuItem value="Username">Username</MenuItem>
+                  <MenuItem value="Hostname">Hostname</MenuItem>
+                  <MenuItem value="Protocol">Protocol</MenuItem>
+                  <MenuItem value="Application">Application</MenuItem>
+                </Select>
+              </FormControl>
+
+              <Autocomplete
+                multiple
+                freeSolo
+                size="small"
+                options={allUniqueEntities}
+                value={selectedEntities}
+                onChange={(event, newValue) => {
+                  setSelectedEntities(newValue);
+                }}
+                ListboxProps={{
+                  style: {
+                    maxHeight: 250
+                  }
+                }}
+                sx={{
+                  minWidth: 400,
+                  flexGrow: 1
+                }}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => {
+                    const { key, ...chipProps } = getTagProps({ index });
+                    return (
+                      <Chip
+                        key={key || option}
+                        label={option}
+                        size="small"
+                        sx={{ height: 24, fontSize: '0.8rem', fontWeight: 600 }}
+                        {...chipProps}
+                      />
+                    );
+                  })
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    fullWidth
+                    label={`Select or Type ${visualizeBy}`}
+                    placeholder={`Type ${visualizeBy} and press Enter...`}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                  />
+                )}
+              />
+            </Box>
           </Grid>
 
+          {/* Row 2: 12 Columns Total */}
           <Grid item xs={12} sm={6} md={2}>
             <FormControl fullWidth size="small">
-              <InputLabel>Time Range</InputLabel>
-              <Select
-                value={timeRange}
-                label="Time Range"
-                onChange={(e) => setTimeRange(e.target.value)}
-              >
-                <MenuItem value="all">All Timelines</MenuItem>
-                <MenuItem value="last_5_minutes">Last 5 Minutes</MenuItem>
-                <MenuItem value="last_hour">Last Hour</MenuItem>
-                <MenuItem value="last_24_hours">Last 24 Hours</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Event Category</InputLabel>
+              <InputLabel sx={{ fontWeight: 500 }}>Event Category</InputLabel>
               <Select
                 value={eventCategory}
                 label="Event Category"
                 onChange={(e) => setEventCategory(e.target.value)}
+                sx={{ borderRadius: 2 }}
               >
                 <MenuItem value="all">All Categories</MenuItem>
                 <MenuItem value="Authentication">Authentication</MenuItem>
@@ -378,13 +372,14 @@ function AnalysisPage() {
             </FormControl>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={1.5}>
+          <Grid item xs={12} sm={6} md={2}>
             <FormControl fullWidth size="small">
-              <InputLabel>Severity</InputLabel>
+              <InputLabel sx={{ fontWeight: 500 }}>Severity</InputLabel>
               <Select
                 value={severity}
                 label="Severity"
                 onChange={(e) => setSeverity(e.target.value)}
+                sx={{ borderRadius: 2 }}
               >
                 <MenuItem value="all">All Levels</MenuItem>
                 <MenuItem value="Low">Low</MenuItem>
@@ -395,44 +390,86 @@ function AnalysisPage() {
             </FormControl>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Source Log</InputLabel>
-              <Select
-                value={sourceLog}
-                label="Source Log"
-                onChange={(e) => setSourceLog(e.target.value)}
-              >
-                <MenuItem value="all">All Files</MenuItem>
-                {uploads.map((upload) => (
-                  <MenuItem key={upload.id} value={upload.file_name}>
-                    {upload.file_name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+          <Grid item xs={6} sm={4} md={2}>
+            <TextField
+              size="small"
+              fullWidth
+              label="Start Time"
+              placeholder="HH:MM:SS"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+            />
           </Grid>
 
-          <Grid item xs={12} sm={6} md={2} sx={{ display: 'flex', gap: 1 }}>
+          <Grid item xs={6} sm={4} md={2}>
+            <TextField
+              size="small"
+              fullWidth
+              label="End Time"
+              placeholder="HH:MM:SS"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+            />
+          </Grid>
+
+          <Grid item xs={12} sm={12} md={4} sx={{ display: 'flex', gap: 1.2, justifyContent: 'flex-end', alignItems: 'center' }}>
+            {logs.length > 0 && (
+              <Button
+                variant="outlined"
+                color="error"
+                size="medium"
+                onClick={handleClearDatabase}
+                sx={{ borderRadius: 2.5, textTransform: 'none', px: 2, fontWeight: 600, height: 40, minWidth: 'fit-content' }}
+              >
+                Clear
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              size="medium"
+              onClick={() => {
+                setSelectedEntities([]);
+                setEventCategory('all');
+                setSeverity('all');
+                setStartTime('');
+                setEndTime('');
+              }}
+              sx={{ borderRadius: 2.5, textTransform: 'none', px: 2.5, fontWeight: 600, height: 40 }}
+            >
+              Reset
+            </Button>
             <Button
               variant="contained"
-              fullWidth
+              size="medium"
               startIcon={<FilterListIcon />}
               onClick={generateVisualization}
               disabled={loading}
-              sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, boxShadow: 'none', '&:hover': { boxShadow: 'none' } }}
+              sx={{ borderRadius: 2.5, textTransform: 'none', px: 3, fontWeight: 600, height: 40, boxShadow: 'none', '&:hover': { boxShadow: 'none' } }}
             >
-              Generate
+              Apply Filter
             </Button>
-            <IconButton onClick={generateVisualization} disabled={loading} color="primary">
-              <RefreshIcon />
-            </IconButton>
           </Grid>
         </Grid>
       </Paper>
 
-      {/* Main Graph Canvas */}
-      <Box sx={{ flexGrow: 1, position: 'relative', m: 2, mt: 0, border: '1px solid #e2e8f0', borderRadius: 3, bgcolor: '#ffffff', overflow: 'hidden' }}>
+      {/* Info helper tag */}
+      <Box sx={{ px: 3, pt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <InfoIcon sx={{ fontSize: 13 }} />
+          Showing {logs.filter(log => {
+            if (activeEntities.length === 0) return true;
+            const vals = getEntityValue(log, visualizeBy);
+            return vals.length > 0 && vals.every(v => activeEntities.includes(v));
+          }).length.toLocaleString()} log entries. Active Lifelines: {activeEntities.join(', ') || 'None (aggregating top active columns)'}.
+        </Typography>
+      </Box>
+
+      {/* Main Wireshark Sequence Diagram Visualizer Container */}
+      <Box sx={{ flexGrow: 1, m: 2, mt: 0.5, border: '1px solid #cbd5e1', borderRadius: 4, bgcolor: '#ffffff', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.05)' }}>
         {logs.length === 0 ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 1.5 }}>
             <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 600 }}>
@@ -443,20 +480,405 @@ function AnalysisPage() {
             </Typography>
           </Box>
         ) : (
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onEdgeClick={handleEdgeClick}
-            fitView
-            minZoom={0.1}
-            maxZoom={1.5}
-            nodesDraggable={false}
-          >
-            <Controls />
-            <Background color="#cbd5e1" gap={20} size={1} />
-          </ReactFlow>
+          /* Scrollable Wireshark Container */
+          <Box sx={{ overflow: 'auto', flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ minWidth: 120 + activeEntities.length * 200 + 400, display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+              
+              {/* Sticky Columns Header */}
+              <Box 
+                sx={{ 
+                  position: 'sticky', 
+                  top: 0, 
+                  zIndex: 20, 
+                  display: 'flex', 
+                  height: 52, 
+                  background: 'linear-gradient(180deg, #f8fafc, #f1f5f9)', 
+                  borderBottom: '2px solid #cbd5e1',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                }}
+              >
+                {/* 1. Time Column Header */}
+                <Box 
+                  sx={{ 
+                    width: 120, 
+                    minWidth: 120, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    fontWeight: 700, 
+                    fontSize: '11px', 
+                    color: '#475569', 
+                    borderRight: '1px solid #cbd5e1',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}
+                >
+                  Time Step
+                </Box>
+                
+                {/* 2. Lifelines Header columns */}
+                <Box sx={{ display: 'flex', width: activeEntities.length * 200, minWidth: activeEntities.length * 200 }}>
+                  {activeEntities.map((entity, idx) => (
+                    <Box 
+                      key={idx} 
+                      sx={{ 
+                        width: 200, 
+                        minWidth: 200, 
+                        display: 'flex', 
+                        flexDirection: 'column',
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        borderRight: idx === activeEntities.length - 1 ? 'none' : '1px dashed #cbd5e1',
+                        px: 1
+                      }}
+                    >
+                      <Paper 
+                        variant="outlined" 
+                        sx={{ 
+                          py: 0.5, 
+                          px: 1.5, 
+                          borderRadius: 2, 
+                          borderColor: '#cbd5e1', 
+                          background: '#ffffff',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                          maxWidth: 180,
+                          textAlign: 'center',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        <Typography 
+                          variant="caption" 
+                          sx={{ 
+                            fontFamily: 'monospace', 
+                            fontWeight: 700, 
+                            color: '#0f172a',
+                            fontSize: '11px'
+                          }}
+                        >
+                          {entity}
+                        </Typography>
+                      </Paper>
+                      <Typography variant="caption" sx={{ fontSize: '8px', color: '#64748b', fontWeight: 600, mt: 0.2 }}>
+                        {visualizeBy === 'IP Address' ? 'ADDRESS' : visualizeBy.toUpperCase()}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+                
+                {/* 3. Comments Column Header */}
+                <Box 
+                  sx={{ 
+                    flexGrow: 1, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    pl: 2.5, 
+                    fontWeight: 700, 
+                    fontSize: '11px', 
+                    color: '#475569', 
+                    borderLeft: '1px solid #cbd5e1',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}
+                >
+                  Comment / Protocol Description
+                </Box>
+              </Box>
+
+              {/* Rows List */}
+              <Box sx={{ bgcolor: '#fdfdfd', flexGrow: 1 }}>
+                {logs.filter(log => {
+                  if (activeEntities.length === 0) return true;
+                  const vals = getEntityValue(log, visualizeBy);
+                  return vals.length > 0 && vals.every(v => activeEntities.includes(v));
+                }).map((log, rowIdx) => {
+                  const category = log.event_category || "Other";
+                  const theme = PROTOCOL_THEMES[category] || PROTOCOL_THEMES["Other"];
+                  const isCorrelated = log.correlated;
+                  
+                  // Get target entity endpoints
+                  let srcVal = null;
+                  let dstVal = null;
+                  const entities = getEntityValue(log, visualizeBy);
+                  if (entities.length > 0) {
+                    if (visualizeBy === 'IP Address') {
+                      srcVal = log.src_ip;
+                      dstVal = log.dst_ip;
+                    } else if (visualizeBy === 'Username') {
+                      srcVal = log.username;
+                      dstVal = log.hostname || log.dst_ip;
+                    } else if (visualizeBy === 'Hostname') {
+                      srcVal = log.hostname;
+                      dstVal = log.dst_ip;
+                    } else if (visualizeBy === 'Protocol') {
+                      srcVal = log.protocol;
+                      dstVal = log.application;
+                    } else if (visualizeBy === 'Application') {
+                      srcVal = log.application;
+                      dstVal = log.process_name;
+                    } else {
+                      srcVal = entities[0];
+                      dstVal = entities[1] || entities[0];
+                    }
+                  }
+
+                  const srcIdx = srcVal ? activeEntities.indexOf(srcVal) : -1;
+                  const dstIdx = dstVal ? activeEntities.indexOf(dstVal) : -1;
+
+                  const columnWidth = 200;
+                  const rowHeight = 46;
+                  
+                  const xSrc = srcIdx !== -1 ? srcIdx * columnWidth + columnWidth / 2 : -1;
+                  const xDst = dstIdx !== -1 ? dstIdx * columnWidth + columnWidth / 2 : -1;
+                  const y = rowHeight / 2;
+
+                  // Determine row styling
+                  let rowBgColor = theme.bg;
+                  let rowBorderColor = theme.border;
+                  
+                  if (log.outcome && typeof log.outcome === "string" && log.outcome.trim().toLowerCase() === "failure") {
+                    rowBgColor = "#fff5f5"; // soft failure tint
+                    rowBorderColor = "#fee2e2";
+                  }
+
+                  // Build mid line label
+                  let arrowLabel = log.protocol || "IP";
+                  if (log.bytes) {
+                    arrowLabel += ` Len=${log.bytes}`;
+                  } else if (log.packet_count) {
+                    arrowLabel += ` Pkts=${log.packet_count}`;
+                  }
+                  
+                  if (log.severity && log.severity !== "Low") {
+                    arrowLabel += ` [Sev:${log.severity}]`;
+                  }
+
+                  return (
+                    <Box 
+                      key={log.id} 
+                      onClick={() => {
+                        setSelectedEvent(log);
+                        setDrawerOpen(true);
+                      }}
+                      sx={{ 
+                        display: 'flex', 
+                        height: rowHeight, 
+                        bgcolor: rowBgColor, 
+                        borderBottom: '1px solid #e2e8f0',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.15s ease, transform 0.15s ease',
+                        borderLeft: isCorrelated ? '4px solid #dc2626' : '4px solid transparent',
+                        '&:hover': { 
+                          bgcolor: isCorrelated ? '#ffe4e6' : '#f1f5f9',
+                          boxShadow: 'inset 0 0 4px rgba(0,0,0,0.03)'
+                        }
+                      }}
+                    >
+                      {/* 1. Time Cell */}
+                      <Box 
+                        sx={{ 
+                          width: 120, 
+                          minWidth: 120, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center', 
+                          fontFamily: 'monospace', 
+                          fontSize: '10.5px', 
+                          color: isCorrelated ? '#991b1b' : '#475569', 
+                          borderRight: '1px solid #cbd5e1',
+                          fontWeight: 500
+                        }}
+                      >
+                        {log.timestamp ? log.timestamp.split(' ')[1] || log.timestamp : '0.000000'}
+                      </Box>
+
+                      {/* 2. SVG Lifelines Area */}
+                      <Box 
+                        sx={{ 
+                          width: activeEntities.length * columnWidth, 
+                          minWidth: activeEntities.length * columnWidth, 
+                          position: 'relative',
+                          height: '100%'
+                        }}
+                      >
+                        <svg 
+                          style={{ 
+                            position: 'absolute', 
+                            top: 0, 
+                            left: 0, 
+                            width: '100%', 
+                            height: '100%', 
+                            overflow: 'visible',
+                            pointerEvents: 'none'
+                          }}
+                        >
+                          {/* Dotted Vertical Lifelines */}
+                          {activeEntities.map((_, idx) => (
+                            <line 
+                              key={idx}
+                              x1={idx * columnWidth + columnWidth / 2} 
+                              y1={0} 
+                              x2={idx * columnWidth + columnWidth / 2} 
+                              y2={rowHeight} 
+                              stroke="#cbd5e1" 
+                              strokeDasharray="4 4"
+                              strokeWidth={1.2}
+                            />
+                          ))}
+
+                          {/* Horizontal Arrow Line */}
+                          {srcIdx !== -1 && dstIdx !== -1 && (
+                            <>
+                              {/* Draw different arrow patterns for loopback vs standard cross-node */}
+                              {srcIdx === dstIdx ? (
+                                /* Loopback / Local action - U-turn path */
+                                <path 
+                                  d={`M ${xSrc} ${y - 8} H ${xSrc + 35} V ${y + 8} H ${xSrc}`} 
+                                  fill="none" 
+                                  stroke={theme.stroke} 
+                                  strokeWidth={isCorrelated ? 2.5 : 1.5}
+                                />
+                              ) : (
+                                /* Standard Directed Horizontal Arrow */
+                                <line 
+                                  x1={xSrc} 
+                                  y1={y} 
+                                  x2={xDst} 
+                                  y2={y} 
+                                  stroke={theme.stroke} 
+                                  strokeWidth={isCorrelated ? 2.2 : 1.2}
+                                />
+                              )}
+
+                              {/* Arrow Head Polygon */}
+                              {srcIdx !== dstIdx ? (
+                                <polygon 
+                                  points={dstIdx > srcIdx 
+                                    ? `${xDst},${y} ${xDst - 8},${y - 3.5} ${xDst - 8},${y + 3.5}` 
+                                    : `${xDst},${y} ${xDst + 8},${y - 3.5} ${xDst + 8},${y + 3.5}`
+                                  } 
+                                  fill={theme.stroke}
+                                />
+                              ) : (
+                                /* Loopback arrow head pointing back to lifeline */
+                                <polygon 
+                                  points={`${xSrc},${y + 8} ${xSrc + 6},${y + 5.5} ${xSrc + 6},${y + 10.5}`} 
+                                  fill={theme.stroke}
+                                />
+                              )}
+
+                              {/* Port Numbers next to the lifelines */}
+                              {visualizeBy === 'IP Address' && srcIdx !== dstIdx && (
+                                <>
+                                  {log.src_port && (
+                                    <text 
+                                      x={dstIdx > srcIdx ? xSrc + 6 : xSrc - 6} 
+                                      y={y - 4} 
+                                      fontSize="8px" 
+                                      fontFamily="monospace"
+                                      fontWeight={600}
+                                      fill="#64748b"
+                                      textAnchor={dstIdx > srcIdx ? "start" : "end"}
+                                    >
+                                      {log.src_port}
+                                    </text>
+                                  )}
+                                  {log.dst_port && (
+                                    <text 
+                                      x={dstIdx > srcIdx ? xDst - 6 : xDst + 6} 
+                                      y={y - 4} 
+                                      fontSize="8px" 
+                                      fontFamily="monospace"
+                                      fontWeight={600}
+                                      fill="#64748b"
+                                      textAnchor={dstIdx > srcIdx ? "end" : "start"}
+                                    >
+                                      {log.dst_port}
+                                    </text>
+                                  )}
+                                </>
+                              )}
+
+                              {/* Centered Line Info Pill */}
+                              {srcIdx !== dstIdx && (
+                                <g>
+                                  {/* White background pill container */}
+                                  <rect 
+                                    x={((xSrc + xDst) / 2) - 52} 
+                                    y={y - 7.5} 
+                                    width={104} 
+                                    height={15} 
+                                    fill="#ffffff" 
+                                    rx={4} 
+                                    stroke={isCorrelated ? "#fca5a5" : "#cbd5e1"} 
+                                    strokeWidth={1}
+                                  />
+                                  {/* Label Text */}
+                                  <text 
+                                    x={(xSrc + xDst) / 2} 
+                                    y={y + 3} 
+                                    fontSize="8px" 
+                                    fontFamily="monospace"
+                                    fontWeight={700}
+                                    textAnchor="middle" 
+                                    fill={isCorrelated ? "#dc2626" : theme.text}
+                                  >
+                                    {arrowLabel}
+                                  </text>
+                                </g>
+                              )}
+                            </>
+                          )}
+                        </svg>
+                      </Box>
+
+                      {/* 3. Comments / Details Cell */}
+                      <Box 
+                        sx={{ 
+                          flexGrow: 1, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          pl: 2.5,
+                          pr: 2,
+                          fontSize: '11px', 
+                          borderLeft: '1px solid #cbd5e1',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {isCorrelated && (
+                          <Chip 
+                            label={`🚨 ALERT: ${log.incident_name}`} 
+                            size="small" 
+                            color="error" 
+                            sx={{ height: 18, fontSize: '8.5px', fontWeight: 800, mr: 1, borderRadius: 1 }}
+                          />
+                        )}
+                        <Typography 
+                          variant="caption" 
+                          sx={{ 
+                            fontSize: '11.5px',
+                            fontWeight: isCorrelated ? 700 : 500, 
+                            color: isCorrelated ? '#991b1b' : '#334155',
+                            fontFamily: 'Outfit, sans-serif'
+                          }}
+                        >
+                          <strong>{log.event_name || 'Traffic Event'}</strong>
+                          {log.application && ` via ${log.application}`}
+                          {log.username && ` by User '${log.username}'`}
+                          {log.hostname && ` on Host '${log.hostname}'`}
+                          {log.risk_score && ` [Risk: ${log.risk_score}]`}
+                          {log.outcome && ` (Status: ${log.outcome})`}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Box>
+          </Box>
         )}
       </Box>
 
@@ -486,10 +908,10 @@ function AnalysisPage() {
             {/* Incident Highlight Badge */}
             {selectedEvent.correlated && (
               <Box sx={{ mb: 3, p: 2, bgcolor: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 3.5 }}>
-                <Typography variant="subtitle2" color="error.dark" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  🚨 CORRELATED SECURITY ALERT: {selectedEvent.incident_name}
+                <Typography variant="subtitle2" color="error.dark" sx={{ fontWeight: 700, mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <WarningAmberIcon sx={{ fontSize: 18 }} /> CORRELATED ALERT: {selectedEvent.incident_name}
                 </Typography>
-                <Typography variant="body2" color="error.dark">
+                <Typography variant="body2" color="error.dark" sx={{ fontSize: '0.8rem' }}>
                   This log is linked to an active alert. Severity Level is flagged as <strong>{selectedEvent.incident_severity}</strong>.
                 </Typography>
               </Box>
@@ -501,9 +923,9 @@ function AnalysisPage() {
                 <Grid item xs={12}>
                   <Paper variant="outlined" sx={{ p: 2, borderRadius: 2.5, bgcolor: '#f8fafc' }}>
                     <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
-                      EVENT NAME
+                      EVENT NAME / DESCRIPTION
                     </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                    <Typography variant="body1" sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
                       {selectedEvent.event_name}
                     </Typography>
                   </Paper>
@@ -525,9 +947,9 @@ function AnalysisPage() {
                     label={selectedEvent.event_category} 
                     size="small" 
                     sx={{ 
-                      bgcolor: `${CATEGORY_COLORS[selectedEvent.event_category] || CATEGORY_COLORS["Other"]}15`, 
-                      color: CATEGORY_COLORS[selectedEvent.event_category] || CATEGORY_COLORS["Other"],
-                      fontWeight: 600,
+                      bgcolor: `${(PROTOCOL_THEMES[selectedEvent.event_category] || PROTOCOL_THEMES["Other"]).stroke}15`, 
+                      color: (PROTOCOL_THEMES[selectedEvent.event_category] || PROTOCOL_THEMES["Other"]).stroke,
+                      fontWeight: 700,
                       borderRadius: 1.5,
                       mt: 0.5
                     }} 
@@ -540,7 +962,7 @@ function AnalysisPage() {
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block' }}>
                     SOURCE IP
                   </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
                     {selectedEvent.src_ip || "N/A"}
                   </Typography>
                 </Grid>
@@ -548,16 +970,35 @@ function AnalysisPage() {
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block' }}>
                     DESTINATION IP
                   </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
                     {selectedEvent.dst_ip || "N/A"}
                   </Typography>
                 </Grid>
 
                 <Grid item xs={6}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block' }}>
+                    SOURCE PORT
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    {selectedEvent.src_port || "N/A"}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block' }}>
+                    DESTINATION PORT
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    {selectedEvent.dst_port || "N/A"}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12}><Divider /></Grid>
+
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block' }}>
                     USERNAME
                   </Typography>
-                  <Typography variant="body2">
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     {selectedEvent.username || "N/A"}
                   </Typography>
                 </Grid>
@@ -565,7 +1006,7 @@ function AnalysisPage() {
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block' }}>
                     HOSTNAME
                   </Typography>
-                  <Typography variant="body2">
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     {selectedEvent.hostname || "N/A"}
                   </Typography>
                 </Grid>
@@ -584,7 +1025,7 @@ function AnalysisPage() {
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block' }}>
                     RISK SCORE
                   </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: selectedEvent.risk_score > 7 ? 'error.main' : 'text.primary' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: selectedEvent.risk_score > 70 ? 'error.main' : 'text.primary' }}>
                     {selectedEvent.risk_score || "N/A"}
                   </Typography>
                 </Grid>
@@ -599,10 +1040,10 @@ function AnalysisPage() {
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block' }}>
-                    SOURCE LOG
+                    BYTES TRANSFERRED
                   </Typography>
-                  <Typography variant="body2" sx={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>
-                    {selectedEvent.source_log || "N/A"}
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    {selectedEvent.bytes ? `${selectedEvent.bytes.toLocaleString()} bytes` : "N/A"}
                   </Typography>
                 </Grid>
 
@@ -626,11 +1067,11 @@ function AnalysisPage() {
                   </>
                 )}
 
-                {/* Analyst Playbook Recommendations */}
+                {/* Playbook Recommendations */}
                 <Grid item xs={12}><Divider /></Grid>
                 <Grid item xs={12}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: 'primary.main' }}>
-                    Mitigation Playbook
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: 'primary.main', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <TerminalIcon sx={{ fontSize: 16 }} /> Mitigation Playbook Instructions
                   </Typography>
                   <List dense sx={{ pl: 2, listStyleType: 'disc', '& .MuiListItem-root': { display: 'list-item', pl: 0 } }}>
                     {getPlaybook(selectedEvent.event_category, selectedEvent.event_name).map((rec, idx) => (

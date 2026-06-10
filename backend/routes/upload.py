@@ -146,3 +146,34 @@ async def upload_files(
             except Exception:
                 db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to process log batch: {str(err)}")
+
+@router.post("/clear")
+async def clear_database_endpoint(db: Session = Depends(get_db)):
+    """Deletes all uploads, raw logs, normalized logs, and incidents to reset database."""
+    try:
+        from models.uploads import Upload
+        from models.raw_logs import RawLog
+        from models.normalized_logs import NormalizedLog
+        from models.header_mappings import HeaderMapping
+        from models.incidents import Incident
+        from models.incident_evidence import IncidentEvidence
+    except ModuleNotFoundError:
+        from backend.models.uploads import Upload
+        from backend.models.raw_logs import RawLog
+        from backend.models.normalized_logs import NormalizedLog
+        from backend.models.header_mappings import HeaderMapping
+        from backend.models.incidents import Incident
+        from backend.models.incident_evidence import IncidentEvidence
+
+    try:
+        db.query(IncidentEvidence).delete()
+        db.query(Incident).delete()
+        db.query(NormalizedLog).delete()
+        db.query(RawLog).delete()
+        db.query(HeaderMapping).delete()
+        db.query(Upload).delete()
+        db.commit()
+        return {"status": "success", "message": "All database records have been deleted successfully."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to clear database: {str(e)}")
