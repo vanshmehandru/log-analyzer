@@ -53,19 +53,19 @@ function App() {
           <Toolbar>
             <TimelineIcon sx={{ mr: 1, color: 'primary.main' }} />
             <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: '700', letterSpacing: '-0.5px' }}>
-              AegisLog <span style={{ color: '#2563eb', fontWeight: '400' }}>Flow Visualizer</span>
+              Vansh's <span style={{ color: '#2563eb', fontWeight: '400' }}>Log Analyser</span>
             </Typography>
-            <Button 
-              component={Link} 
-              to="/upload" 
-              startIcon={<CloudUploadIcon />} 
+            <Button
+              component={Link}
+              to="/upload"
+              startIcon={<CloudUploadIcon />}
               sx={{ mr: 1, fontWeight: 500 }}
             >
               Upload Logs
             </Button>
-            <Button 
-              component={Link} 
-              to="/analysis" 
+            <Button
+              component={Link}
+              to="/analysis"
               startIcon={<TimelineIcon />}
               sx={{ fontWeight: 500 }}
             >
@@ -73,7 +73,7 @@ function App() {
             </Button>
           </Toolbar>
         </AppBar>
-        
+
         <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
           <Routes>
             <Route path="/" element={<Navigate to="/upload" replace />} />

@@ -96,3 +96,5 @@ AegisLog is a full-stack cybersecurity logging and correlation platform. It is d
    - **Select/Type Entities:** Type specific IPs into the autocomplete box to isolate traffic involving only those endpoints. The layout mathematically forces the text box to take up the maximum width on its own dedicated row.
    - **Event Category & Severity:** Narrow down the logs to show only High Severity or Authentication-related events.
 4. **Analyze:** The interactive sequence diagram visually represents network interactions over time. Malicious flows are highlighted in red (correlated events), making it easy to trace the origin and destination of an attack. Clicking on a flow opens a side drawer with detailed raw log data and mitigation playbook suggestions.
+
+<img width="1918" height="906" alt="image" src="https://github.com/user-attachments/assets/c34ed20f-5a81-4296-86a3-889328a503ea" />
