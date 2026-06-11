@@ -985,7 +985,7 @@ function AnalysisPage() {
                     USERNAME
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {selectedEvent.username || "N/A"}
+                    {selectedEvent.src_user || selectedEvent.dst_user || "N/A"}
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -993,7 +993,7 @@ function AnalysisPage() {
                     HOSTNAME
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {selectedEvent.hostname || "N/A"}
+                    {selectedEvent.src_hostname || selectedEvent.dst_hostname || "N/A"}
                   </Typography>
                 </Grid>
 
@@ -1011,8 +1011,8 @@ function AnalysisPage() {
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block' }}>
                     RISK SCORE
                   </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700, color: selectedEvent.risk_score > 70 ? 'error.main' : 'text.primary' }}>
-                    {selectedEvent.risk_score || "N/A"}
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: (selectedEvent.extra_attributes?.confidence_score || selectedEvent.extra_attributes?.credibility || 0) > 70 ? 'error.main' : 'text.primary' }}>
+                    {selectedEvent.extra_attributes?.confidence_score || selectedEvent.extra_attributes?.credibility || "N/A"}
                   </Typography>
                 </Grid>
 
@@ -1029,7 +1029,7 @@ function AnalysisPage() {
                     BYTES TRANSFERRED
                   </Typography>
                   <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                    {selectedEvent.bytes ? `${selectedEvent.bytes.toLocaleString()} bytes` : "N/A"}
+                    {(selectedEvent.bytes_sent || selectedEvent.bytes_received) ? `${(selectedEvent.bytes_sent || 0) + (selectedEvent.bytes_received || 0)} bytes` : "N/A"}
                   </Typography>
                 </Grid>
 
