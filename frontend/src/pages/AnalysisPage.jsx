@@ -315,29 +315,15 @@ function AnalysisPage() {
                 onChange={(event, newValue) => {
                   setSelectedEntities(newValue);
                 }}
-                ListboxProps={{
-                  style: {
-                    maxHeight: 250
+                slotProps={{
+                  listbox: {
+                    style: { maxHeight: 250 }
                   }
                 }}
                 sx={{
                   minWidth: 400,
                   flexGrow: 1
                 }}
-                renderTags={(value, getTagProps) =>
-                  value.map((option, index) => {
-                    const { key, ...chipProps } = getTagProps({ index });
-                    return (
-                      <Chip
-                        key={key || option}
-                        label={option}
-                        size="small"
-                        sx={{ height: 24, fontSize: '0.8rem', fontWeight: 600 }}
-                        {...chipProps}
-                      />
-                    );
-                  })
-                }
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -398,7 +384,7 @@ function AnalysisPage() {
               placeholder="HH:MM:SS"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
               sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
             />
           </Grid>
@@ -411,7 +397,7 @@ function AnalysisPage() {
               placeholder="HH:MM:SS"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
               sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
             />
           </Grid>

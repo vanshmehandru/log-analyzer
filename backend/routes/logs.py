@@ -112,23 +112,21 @@ async def get_flow_logs(
             "timestamp": log_obj.timestamp,
             "event_name": log_obj.event_name,
             "event_category": log_obj.event_category,
-            "username": log_obj.username,
-            "hostname": log_obj.hostname,
+            "src_user": log_obj.src_user,
+            "dst_user": log_obj.dst_user,
+            "src_hostname": log_obj.src_hostname,
+            "dst_hostname": log_obj.dst_hostname,
             "src_ip": log_obj.src_ip,
             "dst_ip": log_obj.dst_ip,
             "src_port": log_obj.src_port,
             "dst_port": log_obj.dst_port,
             "protocol": log_obj.protocol,
             "application": log_obj.application,
-            "process_name": log_obj.process_name,
-            "domain": log_obj.domain,
-            "dns_query": log_obj.dns_query,
             "severity": log_obj.severity,
-            "risk_score": log_obj.risk_score,
-            "outcome": log_obj.outcome,
-            "bytes": log_obj.bytes,
-            "packet_count": log_obj.packet_count,
-            "duration": log_obj.duration,
+            "flow_direction": log_obj.flow_direction,
+            "threat_category": log_obj.threat_category,
+            "bytes_sent": log_obj.bytes_sent,
+            "bytes_received": log_obj.bytes_received,
             "extra_attributes": log_obj.extra_attributes,
             "source_log": file_name,
             "incident_name": incident_name,
@@ -199,11 +197,13 @@ async def get_flow_logs(
                 dst_val = (log["dst_ip"] or "").strip().lower()
                 val_match = (src_val in selected_entities) or (dst_val in selected_entities)
             elif "username" in type_lower or "user" in type_lower:
-                user_val = (log["username"] or "").strip().lower()
-                val_match = user_val in selected_entities
+                src_val = (log["src_user"] or "").strip().lower()
+                dst_val = (log["dst_user"] or "").strip().lower()
+                val_match = (src_val in selected_entities) or (dst_val in selected_entities)
             elif "hostname" in type_lower or "host" in type_lower:
-                host_val = (log["hostname"] or "").strip().lower()
-                val_match = host_val in selected_entities
+                src_host = (log["src_hostname"] or "").strip().lower()
+                dst_host = (log["dst_hostname"] or "").strip().lower()
+                val_match = (src_host in selected_entities) or (dst_host in selected_entities)
             elif "protocol" in type_lower:
                 proto_val = (log["protocol"] or "").strip().lower()
                 val_match = proto_val in selected_entities

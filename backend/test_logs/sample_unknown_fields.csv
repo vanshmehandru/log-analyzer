@@ -1,3 +1,0 @@
-Time,Source IP,Destination IP,Event Name,Magnitude,TLS Version,Cipher Suite,JA3
-10:00,192.168.1.10,10.0.0.5,Login Failed,7,1.3,AES256,abcd123
-10:05,192.168.1.12,10.0.0.6,SQL Injection,9,1.2,DES-CBC3-SHA,efgh456

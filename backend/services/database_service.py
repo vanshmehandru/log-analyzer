@@ -46,27 +46,24 @@ def store_normalized_logs(db: Session, upload_id: int, records: List[Dict[str, A
         log = NormalizedLog(
             upload_id=upload_id,
             timestamp=record.get("timestamp"),
+            event_id=record.get("event_id"),
             event_name=record.get("event_name"),
             event_category=record.get("event_category"),
-            event_id=record.get("event_id"),
-            action=record.get("action"),
-            username=record.get("username"),
-            hostname=record.get("hostname"),
+            src_user=record.get("src_user"),
+            dst_user=record.get("dst_user"),
+            src_hostname=record.get("src_hostname"),
+            dst_hostname=record.get("dst_hostname"),
             src_ip=record.get("src_ip"),
             dst_ip=record.get("dst_ip"),
             src_port=record.get("src_port"),
             dst_port=record.get("dst_port"),
             protocol=record.get("protocol"),
             application=record.get("application"),
-            process_name=record.get("process_name"),
-            domain=record.get("domain"),
-            dns_query=record.get("dns_query"),
+            flow_direction=record.get("flow_direction"),
+            threat_category=record.get("threat_category"),
             severity=record.get("severity"),
-            risk_score=record.get("risk_score"),
-            outcome=record.get("outcome"),
-            bytes=record.get("bytes"),
-            packet_count=record.get("packet_count"),
-            duration=record.get("duration"),
+            bytes_sent=record.get("bytes_sent"),
+            bytes_received=record.get("bytes_received"),
             extra_attributes=record.get("extra_attributes", {})
         )
         normalized_logs.append(log)
@@ -129,13 +126,10 @@ def get_dashboard_stats(db: Session) -> Dict[str, Any]:
         .all()
     )
     
-    # Average Risk Score
-    avg_risk = db.query(func.avg(NormalizedLog.risk_score)).scalar() or 0.0
-
     return {
         "total_logs": total_logs,
         "total_incidents": total_incidents,
-        "average_risk_score": round(avg_risk, 2),
+        "average_risk_score": 0.0,
         "top_source_ips": [{"ip": row[0], "count": row[1]} for row in top_src_ips],
         "top_destination_ips": [{"ip": row[0], "count": row[1]} for row in top_dst_ips],
         "category_distribution": [{"category": row[0], "count": row[1]} for row in category_dist],

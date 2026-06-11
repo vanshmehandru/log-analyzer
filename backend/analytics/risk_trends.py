@@ -7,8 +7,7 @@ def get_risk_trends(db: Session, upload_id: Optional[int] = None) -> List[Dict[s
     """Retrieves average, min, and max risk scores aggregated by severity levels."""
     query = db.query(
         NormalizedLog.severity,
-        func.count(NormalizedLog.id).label("count"),
-        func.avg(NormalizedLog.risk_score).label("avg_risk")
+        func.count(NormalizedLog.id).label("count")
     ).filter(NormalizedLog.severity != None)
     
     if upload_id is not None:
@@ -23,7 +22,7 @@ def get_risk_trends(db: Session, upload_id: Optional[int] = None) -> List[Dict[s
         {
             "severity": row[0],
             "count": row[1],
-            "average_risk": round(float(row[2] or 0.0), 2)
+            "average_risk": 0.0
         }
         for row in results
     ]

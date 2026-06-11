@@ -38,14 +38,13 @@ def build_incident_timeline(db: Session, incident_id: int) -> List[Dict[str, Any
             "event_category": log.event_category,
             "src_ip": log.src_ip,
             "dst_ip": log.dst_ip,
-            "username": log.username,
-            "hostname": log.hostname,
-            "outcome": log.outcome,
-            "process_name": log.process_name,
-            "domain": log.domain,
-            "dns_query": log.dns_query,
+            "src_user": log.src_user,
+            "dst_user": log.dst_user,
+            "src_hostname": log.src_hostname,
+            "dst_hostname": log.dst_hostname,
             "severity": log.severity,
-            "risk_score": log.risk_score
+            "threat_category": log.threat_category,
+            "bytes_sent": log.bytes_sent
         })
         
     return timeline

@@ -19,8 +19,12 @@ def clean_header(header: str) -> str:
     if not isinstance(header, str):
         header = str(header)
         
+    import re
+    # Convert CamelCase to space separated (e.g., SourceIP -> Source IP)
+    header_clean = re.sub(r'([a-z])([A-Z])', r'\1 \2', header)
+    
     # Convert to lowercase
-    header_clean = header.lower()
+    header_clean = header_clean.lower()
     
     # Replace "_" and "-" with space
     header_clean = header_clean.replace("_", " ").replace("-", " ")

@@ -42,7 +42,7 @@ def detect_brute_force(logs: List[NormalizedLog], rules_config: Dict[str, Any]) 
     threshold = config.get("threshold", 5)
     window_minutes = config.get("window_minutes", 5)
     
-    # 1. Filter failed authentication logs with username
+    # 1. Filter failed authentication logs with user
     failed_auth_logs = []
     for log in logs:
         # Check event category
@@ -50,26 +50,28 @@ def detect_brute_force(logs: List[NormalizedLog], rules_config: Dict[str, Any]) 
         
         # Check outcome or name
         is_failure = False
-        if log.outcome:
-            is_failure = log.outcome.strip().lower() == "failure"
+        if log.extra_attributes and log.extra_attributes.get("outcome"):
+            is_failure = str(log.extra_attributes.get("outcome")).strip().lower() == "failure"
         elif log.event_name:
             name_lower = log.event_name.lower()
             is_failure = any(kw in name_lower for kw in ["fail", "denied", "failure"])
             
-        if is_auth and is_failure and log.username:
+        target_user = log.dst_user or log.src_user
+        if is_auth and is_failure and target_user:
+            log._target_user = target_user
             failed_auth_logs.append(log)
             
     if not failed_auth_logs:
         return []
         
-    # 2. Group by username
+    # 2. Group by user
     grouped_logs: Dict[str, List[NormalizedLog]] = {}
     for log in failed_auth_logs:
-        grouped_logs.setdefault(log.username, []).append(log)
+        grouped_logs.setdefault(log._target_user, []).append(log)
         
     incidents = []
     
-    # 3. Apply sliding window detection per username
+    # 3. Apply sliding window detection per user
     for username, user_logs in grouped_logs.items():
         # Sort logs chronologically
         sorted_logs = sorted(user_logs, key=lambda l: parse_log_timestamp(l.timestamp))

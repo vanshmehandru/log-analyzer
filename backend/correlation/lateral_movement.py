@@ -25,24 +25,29 @@ def detect_lateral_movement(logs: List[NormalizedLog], rules_config: Dict[str, A
         is_auth = log.event_category == "Authentication"
         
         is_success = False
-        if log.outcome:
-            is_success = log.outcome.strip().lower() == "success"
+        if log.extra_attributes and log.extra_attributes.get("outcome"):
+            is_success = str(log.extra_attributes.get("outcome")).strip().lower() == "success"
         elif log.event_name:
             name_lower = log.event_name.lower()
             is_success = any(kw in name_lower for kw in ["success", "accepted", "allowed"])
             
         if (is_auth or log.event_category == "Network") and is_success:
-            # Must have username or src_ip as actor, and dst_ip or hostname as target
-            if (log.username or log.src_ip) and (log.dst_ip or log.hostname):
+            # Must have src_user or src_ip as actor, and dst_ip or dst_hostname as target
+            actor = log.src_user or log.src_ip
+            target = log.dst_ip or log.dst_hostname
+            if actor and target:
+                log._actor = actor
                 success_logs.append(log)
                 
     if not success_logs:
         return []
         
-    # 2. Group by username (if present) or src_ip
+    # 2. Group by actor
     grouped_logs: Dict[str, List[NormalizedLog]] = {}
     for log in success_logs:
-        actor = log.username if log.username else f"IP:{log.src_ip}"
+        actor = log._actor
+        if actor == log.src_ip and not log.src_user:
+            actor = f"IP:{actor}"
         grouped_logs.setdefault(actor, []).append(log)
         
     incidents = []
@@ -70,8 +75,8 @@ def detect_lateral_movement(logs: List[NormalizedLog], rules_config: Dict[str, A
             for l in window_logs:
                 if l.dst_ip:
                     unique_dsts.add(l.dst_ip)
-                if l.hostname:
-                    unique_dsts.add(l.hostname)
+                if l.dst_hostname:
+                    unique_dsts.add(l.dst_hostname)
                     
             if len(unique_dsts) >= threshold:
                 log_ids = [l.id for l in window_logs if l.id is not None]

@@ -73,7 +73,12 @@ async def upload_files(
             # Step 2: Store Raw Logs (original CSV rows)
             # Use seek to beginning in case we need to read it again
             df_raw = pd.read_csv(io.BytesIO(file_bytes))
-            raw_records = df_raw.to_dict(orient="records")
+            
+            # Use to_json to ensure all pandas/numpy types are correctly serialized
+            import json
+            json_str = df_raw.to_json(orient="records")
+            raw_records = json.loads(json_str)
+            
             store_raw_logs(db, upload_id=upload_record.id, records=raw_records)
             
             # Update record count
@@ -134,7 +139,20 @@ async def upload_files(
             "total_incidents": len(new_incidents)
         }
         
+    except HTTPException:
+        # Re-raise HTTP exceptions (like the 400 for non-CSV files) to not wrap them in 500
+        db.rollback()
+        for upload_rec in created_uploads:
+            try:
+                db.refresh(upload_rec)
+                upload_rec.status = "failed"
+                db.commit()
+            except Exception:
+                db.rollback()
+        raise
     except Exception as err:
+        import traceback
+        traceback.print_exc()
         # Mark all created uploads in this batch as failed on exception
         db.rollback()
         for upload_rec in created_uploads:

@@ -74,6 +74,14 @@ def categorize_event(event_name: str) -> str:
 
 def categorize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """Adds or updates the 'event_category' column in the DataFrame based on 'event_name'."""
+    if "event_category" in df.columns:
+        # Fill missing categories using the categorizer
+        if "event_name" in df.columns:
+            mask = df["event_category"].isna() | (df["event_category"] == "") | (df["event_category"] == "Other")
+            df.loc[mask, "event_category"] = df.loc[mask, "event_name"].apply(categorize_event)
+        df["event_category"] = df["event_category"].fillna("Other")
+        return df
+        
     if "event_name" not in df.columns:
         df["event_category"] = "Other"
         return df

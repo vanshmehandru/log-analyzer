@@ -104,19 +104,31 @@ def extract_extra_attributes(df: pd.DataFrame, translation_dict: Dict[str, str])
         
     return extra_attributes_list
 
-def normalize_dataframe(df: pd.DataFrame, translation_dict: Dict[str, str]) -> pd.DataFrame:
-    """Normalizes the DataFrame by renaming columns and collecting extra fields.
+def normalize_severity_value(val) -> str:
+    if pd.isna(val) or not str(val).strip():
+        return "Unknown"
+    val_str = str(val).strip().lower()
     
-    Renames the mapped columns, extracts the unmapped columns into a new 'extra_attributes'
-    column, and drops the original unmapped columns. Performs safe type casting on numeric columns.
-    
-    Args:
-        df: The original pandas DataFrame.
-        translation_dict: The translation dictionary.
+    # Text-based
+    if val_str in ("critical", "fatal", "emergency"): return "Critical"
+    if val_str in ("high", "major", "error"): return "High"
+    if val_str in ("medium", "minor", "warning", "warn"): return "Medium"
+    if val_str in ("low", "info", "informational", "debug", "notice"): return "Low"
         
-    Returns:
-        A new DataFrame containing normalized columns and an 'extra_attributes' column.
-    """
+    # Number-based (e.g. QRadar uses 1-10)
+    try:
+        num = int(float(val))
+        if num >= 8: return "Critical"
+        if num >= 6: return "High"
+        if num >= 4: return "Medium"
+        return "Low"
+    except ValueError:
+        pass
+        
+    return str(val).capitalize()
+
+def normalize_dataframe(df: pd.DataFrame, translation_dict: Dict[str, str]) -> pd.DataFrame:
+    """Normalizes the DataFrame by renaming columns and collecting extra fields."""
     # 1. Extract extra attributes first before modifying the DataFrame columns
     extra_attrs = extract_extra_attributes(df, translation_dict)
     
@@ -129,6 +141,11 @@ def normalize_dataframe(df: pd.DataFrame, translation_dict: Dict[str, str]) -> p
     # 3. Rename columns using translation dictionary
     df_normalized = df_normalized.rename(columns=translation_dict)
     
+    # 3.5 Normalize Severity
+    if "severity" in df_normalized.columns:
+        df_normalized["severity"] = df_normalized["severity"].apply(normalize_severity_value)
+
+    
     # 4. Filter the DataFrame to keep only the normalized columns + extra_attributes
     target_columns = list(translation_dict.values()) + ["extra_attributes"]
     
@@ -137,8 +154,8 @@ def normalize_dataframe(df: pd.DataFrame, translation_dict: Dict[str, str]) -> p
     df_normalized = df_normalized[existing_columns]
     
     # 5. Perform safe type casting for numeric fields
-    integer_cols = ["src_port", "dst_port", "bytes", "packet_count"]
-    float_cols = ["risk_score", "duration"]
+    integer_cols = ["src_port", "dst_port", "bytes_sent", "bytes_received"]
+    float_cols = []
     
     for col in integer_cols:
         if col in df_normalized.columns:
