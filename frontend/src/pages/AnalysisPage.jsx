@@ -176,13 +176,13 @@ function AnalysisPage() {
       case 'IP Address':
         return [log.src_ip, log.dst_ip].filter(Boolean);
       case 'Username':
-        return [log.username].filter(Boolean);
+        return [log.src_user || log.dst_user, log.src_hostname || log.dst_hostname || log.dst_ip].filter(Boolean);
       case 'Hostname':
-        return [log.hostname].filter(Boolean);
+        return [log.src_hostname || log.dst_hostname, log.dst_ip || log.src_ip].filter(Boolean);
       case 'Protocol':
-        return [log.protocol].filter(Boolean);
+        return [log.protocol, log.application].filter(Boolean);
       case 'Application':
-        return [log.application].filter(Boolean);
+        return [log.application, log.process_name || log.protocol].filter(Boolean);
       default:
         return [log.src_ip, log.dst_ip].filter(Boolean);
     }
@@ -592,17 +592,17 @@ function AnalysisPage() {
                       srcVal = log.src_ip;
                       dstVal = log.dst_ip;
                     } else if (visualizeBy === 'Username') {
-                      srcVal = log.username;
-                      dstVal = log.hostname || log.dst_ip;
+                      srcVal = log.src_user || log.dst_user;
+                      dstVal = log.src_hostname || log.dst_hostname || log.dst_ip;
                     } else if (visualizeBy === 'Hostname') {
-                      srcVal = log.hostname;
-                      dstVal = log.dst_ip;
+                      srcVal = log.src_hostname || log.dst_hostname;
+                      dstVal = log.dst_ip || log.src_ip;
                     } else if (visualizeBy === 'Protocol') {
                       srcVal = log.protocol;
                       dstVal = log.application;
                     } else if (visualizeBy === 'Application') {
                       srcVal = log.application;
-                      dstVal = log.process_name;
+                      dstVal = log.process_name || log.protocol;
                     } else {
                       srcVal = entities[0];
                       dstVal = entities[1] || entities[0];
@@ -882,7 +882,7 @@ function AnalysisPage() {
             {/* Header */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ShieldIcon color="primary" /> Event Forensic Triage
+                <ShieldIcon color="primary" /> Log Analyzer
               </Typography>
               <IconButton onClick={() => setDrawerOpen(false)}>
                 <CloseIcon />

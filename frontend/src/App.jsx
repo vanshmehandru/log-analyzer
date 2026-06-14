@@ -53,7 +53,7 @@ function App() {
           <Toolbar>
             <TimelineIcon sx={{ mr: 1, color: 'primary.main' }} />
             <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: '700', letterSpacing: '-0.5px' }}>
-              Vansh's <span style={{ color: '#2563eb', fontWeight: '400' }}>Log Analyser</span>
+              Log Analyzer
             </Typography>
             <Button
               component={Link}
